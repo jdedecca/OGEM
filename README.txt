@@ -12,6 +12,9 @@ Some required installations include:
 
 - Scipy (scipy.org)
 - PyPSA 4.2 (pypsa.org)
+- igraph (http://igraph.org/python/)
+- Glpk 4.57 or lower if GLPK is the preferred solver (www.gnu.org/software/glpk/)
+
 
 ## License
 OGEM is distributed under the GNU General Public License, Version 3.
