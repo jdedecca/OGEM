@@ -10,8 +10,8 @@ The OGEM is part of the undergoing Ph.D. research of João Gorenstein Dedecca on 
 
 Some required installations include:
 
-- Scipy (scipy.org)
-- PyPSA 4.2 (pypsa.org)
+- Scipy (www.scipy.org)
+- PyPSA 4.2 (www.pypsa.org)
 - igraph (http://igraph.org/python/)
 - Glpk 4.57 or lower if GLPK is the preferred solver (www.gnu.org/software/glpk/)
 
