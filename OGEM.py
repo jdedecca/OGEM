@@ -1246,100 +1246,6 @@ def Join_XLS(number_runs):
     return
 
 
-def PyPSA_Network_Setup_Old(period, pypsa_network):
-    # PyPSA snapshot data: name, weightings
-    columns = ["name", "weightings"]
-    index = list(range(parameters["case_segments"]))
-    pypsa_network.set_snapshots(index)
-    pypsa_network.snapshot_weightings = parameters["segments_probability"]
-
-    # PyPSA bus data: name, x, y, terminal_type, shared_tso, tso, active, current_type
-    columns = ["number", "name", "valid", "terminal_type", "x", "y", "shared_tso", "current_type", "zone", "offshore_p_nom"]
-    index = [str(x[0]) for x in OGEM_settings.data["buses"]]
-    data = [x[0:8] + [1, 0] for x in OGEM_settings.data["buses"]]
-    dataframe = pd.DataFrame(data, columns=columns, index=index)
-    dataframe["shared_tso"] = [list(x.split()) for x in dataframe["shared_tso"]]
-    dataframe["tso"] = dataframe["shared_tso"]
-
-    pypsa.io.import_components_from_dataframe(pypsa_network, dataframe, "Bus")
-    pypsa_network.buses["number"] = pypsa_network.buses["number"].astype(int)
-
-    # PyPSA line data: name, bus0, bus1, x, r, s_nom, s_nom_extendable, length
-    # PyPSA transport link data: name, bus0, bus1, s_nom, s_nom_extendable
-    columns = ["number", "bus0", "bus1", "name", "active", "s_nom", "length", "link_type", "valid"]
-    index = [str(x[0]) for x in OGEM_settings.data["links"]]
-    data = [x[0:10] for x in OGEM_settings.data["links"]]
-    links_dataframe = pd.DataFrame(data, columns=columns,
-                                   index=index)
-    links_dataframe["r"] = links_dataframe["length"] * 0.01 * OGEM_settings.base_Z / 1.6
-    links_dataframe["x"] = links_dataframe["r"]
-    links_dataframe["s_nom_extendable"] = False
-    links_dataframe = links_dataframe.sort_values("link_type")
-
-    pypsa.io.import_components_from_dataframe(pypsa_network, links_dataframe[links_dataframe["link_type"] == "line"], "Line")
-    pypsa.io.import_components_from_dataframe(pypsa_network, links_dataframe[links_dataframe["link_type"] == "link"],
-                                              "TransportLink")
-    #pypsa indexes are str so create number index as int for igraph and numpy indexing
-    links_dataframe["number"] = links_dataframe["number"].astype(int)
-    pypsa_network.lines["number"] = pypsa_network.lines["number"].astype(int)
-    pypsa_network.transport_links["number"] = pypsa_network.transport_links["number"].astype(int)
-
-    # PyPSA generator data: name, bus, dispatch, p_nom, p_nom_extendable, source, marginal_cost
-    columns = ["name", "bus", "source", "p_nom", "dummy", "dummy 2", "marginal_cost"]
-    index = [str(x[0]) for x in OGEM_settings.data["gen"]]
-    data = [x[0:7] for x in OGEM_settings.data["gen"]]
-    dataframe = pd.DataFrame(data, columns=columns,
-                             index=index)
-
-    #dataframe["name"] = dataframe["name"].astype(str)
-    dataframe["p_nom_extendable"] = False
-    dataframe["p_nom_series"] = [list(map(float, x.split())) for x in dataframe["p_nom"].astype(str)]
-    dataframe["p_nom"] = [x[period] for x in dataframe["p_nom_series"]]
-    dataframe["dispatch"] = ["variable" if x in ["off_wind", "PV", "on_wind"] else "flexible" for x in dataframe["source"]]
-
-    pypsa.io.import_components_from_dataframe(pypsa_network, dataframe, "Generator")
-
-    pypsa_network.buses["p_nom"] = pypsa_network.generators.loc[:, ["bus", "p_nom"]].groupby(by="bus").sum()
-
-    # PyPSA storage data: name, bus, dispatch, p_nom, p_nom_extendable, source, state_of_charge_initial, efficiency_store, efficiency_dispatch, marginal_cost
-    columns = ["bus", "source", "p_nom", "efficiency_store", "efficiency_dispatch", "state_of_charge_initial", "name", "dummy 1", "dummy 2", "marginal_cost"]
-
-    index = [x[7] for x in OGEM_settings.data["storage"]]
-    data = [x[1:11] for x in OGEM_settings.data["storage"]]
-    dataframe = pd.DataFrame(data, columns=columns,
-                             index=index)
-
-    #dataframe["name"] = dataframe["name"].astype(str)
-    dataframe["dispatch"] = "flexible"
-    dataframe["p_nom_extendable"] = False
-
-    dataframe["p_nom_series"] = [list(map(float, x.split())) for x in dataframe["p_nom"]]
-    dataframe["p_nom"] = [max(x) for x in dataframe["p_nom_series"]]
-
-    # if False:
-    #     hydro_index = [x.number for x in Generators if x.gentype == "hydro"]
-    #     hydro_dataframe = pd.DataFrame([[x.number, x.bus, "flexible",
-    #                                      x.max_cap[period], False, x.gentype, 0, 1.0,
-    #                                      0.8] for x in Generators if x.gentype == "hydro"], columns=columns,
-    #                                    index=hydro_index)
-    #     dataframe = pd.concat([dataframe, hydro_dataframe])
-
-
-    pypsa.io.import_components_from_dataframe(pypsa_network, dataframe, "StorageUnit")
-
-    # PyPSA load data: bus, name
-    columns = ["bus", "name"]
-    index = pypsa_network.buses.index
-    data = pypsa_network.buses[["number", "name"]].rename(columns={"number": "bus"})
-
-    dataframe = pd.DataFrame(data, index=index, columns=columns)
-
-    dataframe["bus"] = dataframe["bus"].astype(int)
-
-    pypsa.io.import_components_from_dataframe(pypsa_network, dataframe, "Load")
-
-    return links_dataframe, pypsa_network
-
 def PyPSA_Network_Setup(period, pypsa_network):
     """ Creation of PyPSA elements from input data """
 
@@ -1462,38 +1368,7 @@ def PyPSA_Network_Update(period, pypsa_network, links_dataframe):
     pypsa_network.buses["p_nom"] = pypsa_network.generators.loc[:, ["bus", "p_nom"]].groupby(by="bus").sum()
 
     return links_dataframe, pypsa_network
-
-def PyPSA_Time_Series_Old(data, period, case, network):
-    # PyPSA load time series: snapshots, loads
-    columns = network.loads.index
-    index = network.snapshots
-    demand_series = np.array([[bus_demand[4] for bus_demand in data["demand"] if (bus_demand[2] == period and bus_demand[3] == case)] for segment in index])
-    dataframe = pd.DataFrame(demand_series, columns=columns, index=index)
-    pypsa.io.import_series_from_dataframe(network, dataframe, "Load", "p_set")
-
-    # PyPSA RES generator time series: snapshots, generators
-    index = network.snapshots
-    columns = [str(RES_line[9]) for RES_line in data["RES_series"] if RES_line[3] == case and RES_line[4] == 0]
-    RES_series = np.array(
-        [[RES_line[7] for RES_line in data["RES_series"] if RES_line[3] == case and RES_line[4] == segment] for segment
-         in range(parameters["case_segments"])])
-    dataframe = pd.DataFrame(RES_series, columns=columns, index=index)
-
-    network.generators_t.p_max_pu = dataframe.combine_first(network.generators_t.p_max_pu)
-
-    if True:
-        # PyPSA hydro generator time series: snapshots, generators
-        index = network.snapshots
-        columns = [str(hydro_line[9]) for hydro_line in data["inflow_series"] if hydro_line[3] == case and hydro_line[4] == 0]
-        hydro_series = np.array(
-            [[hydro_line[7] * network.storage_units.loc[str(hydro_line[9]), "p_nom"] for hydro_line in data["inflow_series"] if hydro_line[3] == case and hydro_line[4] == segment]
-             for segment in range(parameters["case_segments"])])
-
-        dataframe = pd.DataFrame(hydro_series, columns=columns, index=index)
-
-        pypsa.io.import_series_from_dataframe(network, dataframe, "StorageUnit", "inflow")
-
-    return network
+    
 
 def PyPSA_Time_Series(data, period, case, network):
     """ Updates times series for the current period """
@@ -1529,24 +1404,6 @@ def PyPSA_Time_Series(data, period, case, network):
     return network
 
 
-def Load_Parameters_Old(simulation_file):
-    global parameters
-
-    warnings.simplefilter("ignore")
-    simulations_workbookbook = xls.load_workbook(simulation_file, data_only=True)
-    warnings.simplefilter("default")
-
-    parameters = {}
-
-    main_raw = [[y.value for y in x] for x in simulations_workbookbook["Main"].rows]
-    parameters.update({x[0]: x[1] for x in main_raw[1:] if x[0] != None})
-    parameters["sens_name"] = parameters["sens_name"].split()
-    parameters["sens_values"] = [map(float, x.split()) for x in str(parameters["sens_value"]).split(';')]
-    parameters["segments_probability"] = [float(x) for x in str(parameters["segments_probability"]).split()]
-    parameters["cases_probability"] = [float(x) for x in str(parameters["cases_probability"]).split()]
-
-    return parameters
-
 def Load_Parameters(simulation_file):
     """ Load analysis parameters to initialize run calls """
 
@@ -1565,42 +1422,6 @@ def Load_Parameters(simulation_file):
     parameters["cases_probability"] = [float(x) for x in str(parameters["cases_probability"]).split()]
 
     return parameters
-
-
-def Load_Data_Old(simulation_file):
-    warnings.simplefilter("ignore")
-    simulations_workbook = xls.load_workbook(simulation_file, data_only=True)
-    warnings.simplefilter("default")
-
-    data = {}
-
-    main_raw = [[y.value for y in x] for x in simulations_workbook["Main"].rows]
-
-    links_raw = [[y.value for y in x] for x in simulations_workbook["Links"].rows]
-    data["links"] = [x for x in links_raw[1:] if x[0] != None]
-
-    buses_raw = [[y.value for y in x] for x in simulations_workbook["buses"].rows]
-    data["buses"] = [x for x in buses_raw[1:] if x[2]]
-
-    gen_raw = [[y.value for y in x] for x in simulations_workbook["Generators"].rows]
-    data["gen"] = [x for x in gen_raw[1:] if x[3] != 0 and x[2] != None]
-
-    storage_raw = [[y.value for y in x] for x in simulations_workbook["Storage"].rows]
-    data["storage"] = [x for x in storage_raw[1:] if x[2] != None and x[3] != 0]
-
-    hydro_raw = [[y.value for y in x] for x in simulations_workbook["Inflow"].rows]
-    data["inflow_series"] = [x for x in hydro_raw[1:] if x[5] != None and x[6] != 0]
-
-    RES_raw = [[y.value for y in x] for x in simulations_workbook["RES_series"].rows]
-    data["RES_series"] = [x for x in RES_raw[1:] if x[5] != None and x[6] != 0]
-
-    demand_raw = [[y.value for y in x] for x in simulations_workbook["Demand"].rows]
-    data["demand"] = [x for x in demand_raw[1:] if x[4] >= 0]
-
-    res_availability_raw = [[y.value for y in x] for x in simulations_workbook["RES_availability"].rows]
-    data["RES_availability"] = [x for x in res_availability_raw if x[3] != None]
-
-    return data
 
 def Load_Data(simulation_file):
     """ Load input data for a given run """
