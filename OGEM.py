@@ -11,7 +11,6 @@ import pandas as pd
 import pypsa
 import igraph
 import OGEM_settings
-import load_flow_verification
 from copy import deepcopy
 
 def Period_Run(run_number, period, selection_data, pypsa_network, links_dataframe):
